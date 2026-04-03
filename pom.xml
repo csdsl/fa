@@ -55,6 +55,12 @@
             <artifactId>spring-ai-starter-model-chat-memory</artifactId>
         </dependency>
 
+        <!-- MCP Client 支持 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-mcp-client</artifactId>
+        </dependency>
+
         <!-- RAG：向量存储（内存版，学习用） -->
         <dependency>
             <groupId>org.springframework.ai</groupId>

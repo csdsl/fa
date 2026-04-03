@@ -51,7 +51,7 @@ public class WeatherService {
      * 再来一个工具：模拟查询时间
      * 模型会根据用户问题自动判断该调哪个方法
      */
-    @Tool(description = "查询指定城市历史上的武将")
+    @Tool(description = "查询指定城市名人")
     public String getAuthor(@ToolParam(description = "城市名称") String city) {
         // 这里用模拟数据，实际项目替换为真实 API 调用
         return switch (city) {

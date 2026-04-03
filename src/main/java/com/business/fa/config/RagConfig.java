@@ -41,7 +41,7 @@ public class RagConfig {
 
             // 2. 按空行分段，每段作为一个文档块
             //    这是最简单的分块方式，适合我们这种结构清晰的文档
-            List<Document> chunks = Arrays.stream(content.split("\n\n"))
+            List<Document> chunks = Arrays.stream(content.split("--"))
                     .filter(s -> !s.isBlank())
                     .map(Document::new)
                     .toList();
