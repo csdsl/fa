@@ -22,7 +22,7 @@ import java.util.List;
  * 不需要修改 Controller 代码。
  */
 @RestController
-@RequestMapping("/mcp")
+@RequestMapping("/mcp/demo")
 public class McpController {
 
     private final ChatClient chatClient;
