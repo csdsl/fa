@@ -1,150 +1,150 @@
----
-inclusion: manual
----
+# 面试模拟总结 - Day 2
 
-# 面试模拟总结 - 第二天
-
-## Q1: MySQL联合索引设计 + 索引失效排查
-
-**问题：** 资产卡片表50万+数据，按org_id + status + entry_date范围查询，怎么建索引？用了索引还是慢怎么排查？
-
-**参考答案：**
-
-索引：`idx_org_status_date(org_id, status, entry_date)`
-
-顺序原因：org_id和status是等值查询放前面，entry_date是范围查询放最后。联合索引遇到范围查询后面的列就用不上了。entry_date放最后还能利用索引有序性避免filesort。
-
-用了索引还是慢的排查：
-- explain看type（range/ref）、rows估算值、Extra（Using filesort/Using temporary）
-- 回表问题：SELECT * 导致大量回表，改成覆盖索引
-- 数据分布问题：如果该org_id下40万条都是NORMAL，索引过滤效果差
-- 深分页问题：LIMIT 10000,20用延迟关联或游标分页
-
-补充：WHERE条件的书写顺序不影响索引使用，MySQL优化器会自动重排匹配最优索引。
+## 总体评分：6.5/10
 
 ---
 
-## Q2: 微服务线上故障排查（user-service响应飙升到5秒）
+## Q1: KWork智能结账Agent的工具调用设计（编排顺序+失败回滚）
 
-**问题：** user-service响应从50ms飙到5秒，下游服务超时，怎么排查和处理？
+**你的回答：** 单一职责、清晰描述与结构化参数、面向任务的高阶工具优先、程序可解析的返回格式、状态与上下文管理
 
-**参考答案：**
+**评分：6/10**
 
-第一步：先止血（1分钟内）
-- 下游触发熔断降级，不再调user-service
-- 判断是否需要紧急扩容或重启
-
-第二步：快速定位层级（5分钟内）
-- Grafana看CPU/内存/GC/线程数/连接池
-- Zipkin看请求卡在哪个环节
-- 数据库监控：连接数是否打满、SHOW PROCESSLIST
-
-第三步：缩小范围
-- 数据库层面：死锁日志、慢查询日志
-- 应用层面：jstack看线程状态（BLOCKED/WAITING）
-- GC问题：GC日志，Full GC是否频繁
-- 连接池耗尽：HikariCP监控
-
-第四步：Arthas精确定位
-- `thread -n 3` 看最忙线程
-- `trace` 追踪方法耗时
-- `watch` 观察入参返回值
-
-第五步：修复并复盘
-
-核心原则：先恢复，再定位，最后根治。
+**参考答案要点：**
+- 工具拆分：5个独立工具（checkVoucher、exchangeAdjust、profitCarryOver、depreciationCalc、periodClose），每个输入输出结构化JSON，返回含nextStep字段
+- 执行编排：Prompt引导+工具返回驱动，System Prompt定义流程DAG，Agent根据返回动态调整。不用硬编码workflow引擎，因为不同组织结账流程有差异
+- 异常回滚：每步执行前记checkpoint到Redis（状态快照），失败时调rollbackTo工具按逆序补偿（Saga模式）
+- 防护措施：periodClose工具内部硬约束校验前置步骤是否完成，防止LLM跳步
 
 ---
 
-## Q3: Sentinel vs Hystrix熔断策略对比
+## Q2: Agent会话状态持久化（用户中断后恢复进度）
 
-**问题：** 两者区别？银行App中怎么配置熔断规则？
+**你的回答：** checkpoint中添加执行步骤状态等信息，redis持久化
 
-**参考答案：**
+**评分：4/10**
 
-核心区别：
-- Hystrix：主要通过请求失败率触发，维度单一，配置多为静态编码，已停止维护，线程池隔离开销大
-- Sentinel：支持多维度（异常比例、异常数、慢调用RT），支持Nacos动态配置，信号量隔离更轻量，有Dashboard可视化
-
-熔断状态机：Hystrix经典三态（Closed→Open→Half-Open），Sentinel多了慢调用比例策略，恢复更平滑
-
-银行App配置示例：
-- 调用user-service：慢调用比例策略，RT阈值500ms，比例阈值60%，熔断时长10秒，最小请求数5
-- 含义：5个请求中60%超过500ms就熔断10秒，10秒后放探测请求
-
-选Sentinel的原因：Hystrix停止维护、线程池隔离开销大、Sentinel有Dashboard+Nacos动态推送。
+**参考答案要点：**
+- 业务状态：Redis Hash存储 `kwork:checkout:{orgId}:{period}`，field为步骤名，value为状态JSON（status/startTime/result/checkpointData）
+- 持久化双写：先写MySQL `t_checkout_task` 表再写Redis，Redis是热数据加速层
+- 对话上下文：MySQL `t_chat_memory` 表按session_id存历史消息，恢复时注入Agent ChatMemory
+- 恢复触发：前端调 `/api/checkout/resume`，后端检查未完成任务，加载历史对话，Agent从断点继续
+- 过期策略：Redis TTL 7天，超时标记为已超时
 
 ---
 
-## Q4: 多租户数据隔离架构设计
+## Q3: ThreadPoolExecutor参数设定（50万资产卡片折旧计算）
 
-**问题：** 大客户要物理隔离，中小客户共享数据库，怎么设计同时支持两种模式？
+**你的回答：** CPU密集+少量IO，核心线程8+1，最大线程2倍，1000一批分500批，队列500。压测后调优为核心12-15，最大20，队列256
 
-**参考答案：**
+**评分：7/10**
 
-核心思路：一套代码，多种隔离策略，通过配置切换。
-
-三层架构：
-
-1. 租户路由层：TenantContext（ThreadLocal）存租户ID，拦截器从Token/Header解析
-
-2. 数据源路由层：
-   - 租户配置表记录每个租户的隔离模式（SHARED/EXCLUSIVE）和数据源信息
-   - AbstractRoutingDataSource实现动态数据源切换
-   - determineCurrentLookupKey()根据当前租户ID查配置返回对应数据源
-
-3. 数据隔离策略：
-   - 独立数据库（大客户）：每个租户独立数据库实例
-   - 共享数据库（中小客户）：通过tenant_id字段区分，MyBatis拦截器自动注入WHERE条件
-
-防泄露兜底：所有表必须有tenant_id字段+索引，拦截器强制注入，定期审计脚本。
-
-扩展性：新租户按套餐自动分配模式，提供升级迁移工具。
+**参考答案补充：**
+- 队列从500调到256的原因：队列太长导致尾延迟高，缩短让CallerRunsPolicy更早介入，整体吞吐更均匀
+- 拒绝策略：CallerRunsPolicy（让提交线程自己执行，天然限流不丢任务）
+- 异常处理：CompletableFuture收集结果，失败批次重试3次，数据异常的卡片隔离标记
+- 压测观察指标：CPU利用率（目标80-85%）、GC频率、任务完成时间分布
 
 ---
 
-## Q5: 多租户Redis缓存Key设计 + 大租户防护
+## Q4: 分布式事务（信用卡还款场景）
 
-**问题：** Redis Key怎么设计避免覆盖？大租户数据量大怎么处理？
+**你的回答：** 本地消息表+异步保证最终一致性
 
-**参考答案：**
+**评分：5/10**
 
-Key命名规范：`{tenantId}:{业务模块}:{具体Key}`
-
-封装TenantRedisTemplate自动拼接前缀，开发者无需关心。
-
-为什么不用Hash存所有数据：大Key问题（>10MB影响性能）、无法单独设TTL、删除时阻塞Redis。
-
-大租户防护方案：
-- 方案A：应用层按租户设内存配额，超配额触发LRU淘汰
-- 方案B：大客户独立Redis实例，中小客户共享集群
-- 方案C：Redis Cluster Hash Tag + 配额控制
-
-监控：按前缀统计Key数量和内存占用，单租户超30%告警，大Key检测。
+**参考答案要点：**
+- 为什么不用Seata/TCC：全局锁性能差、TCC侵入性强，还款允许秒级延迟
+- 流程：本地事务内扣余额+插消息表 → 异步发MQ → 信用卡服务消费更新账单 → 对账服务记录流水
+- 消息表结构：msg_id, biz_type, payload, status(PENDING/SENT/FAILED), retry_count
+- 可靠性：定时任务30s扫描PENDING消息重投，最大重试5次超过告警
+- 消费端幂等：msg_id做幂等键，Redis判重
+- 防重复扣款：requestId + 数据库乐观锁version字段
 
 ---
 
-## Q6: JVM问题实战排查（内存泄漏）
+## Q5: RabbitMQ消息可靠性保证
 
-**问题：** 项目中实际遇到的JVM问题，怎么发现、排查、解决？
+**你的回答：** 对消息进行持久化
 
-**参考答案（结合资产折旧场景）：**
+**评分：3/10**
 
-发现：Grafana告警GC暂停从几十ms飙到3-5秒，Full GC从每天1-2次变成每小时多次。
+**参考答案要点（三阶段保障）：**
+- 生产端→Broker：Publisher Confirm + Return回调，ack成功更新消息表状态
+- Broker存储：Exchange/Queue/Message三个持久化 + 镜像队列多节点同步
+- Broker→消费端：手动ack模式，处理成功才basicAck，异常basicNack+requeue，超过3次进死信队列DLX
+- 兜底：本地消息表定时对账，SENT状态超2分钟未确认的重新投递
 
-排查：
-1. GC日志：老年代占用持续增长，Full GC后回收不了多少，典型内存泄漏
-2. jmap导出堆转储，MAT分析
-3. Leak Suspects：一个静态HashMap占老年代60%，存了大量AssetCard对象
+---
 
-根因：折旧计算时用静态HashMap做本地缓存，没有大小限制和过期策略，只进不出。
+## Q6: Redis缓存与数据库一致性（用户修改手机号）
 
-解决：
-1. 替换为Caffeine缓存（maximumSize=10000, expireAfterWrite=10min）
-2. 批量任务结束后主动invalidateAll()
-3. JVM参数：堆从4G调到8G，新生代比例调大
+**你的回答：** 旁路策略 + Binlog+Canal保证
 
-效果：Full GC从每小时多次降到每天1次，暂停从3-5秒降到100ms内。
+**评分：6/10**
+
+**参考答案要点：**
+- Cache-Aside具体顺序：先更新DB再删缓存（不是更新缓存，避免并发覆盖）
+- 为什么这个顺序：先删缓存再更新DB有经典并发问题（读线程写回旧值）
+- Canal兜底：MySQL Binlog → Canal → MQ → 缓存清理消费者，延迟500ms-1s
+- 线上问题：Canal消费积压导致缓存延迟5分钟，解决方案是应用层直接删缓存为主路径+Canal异步兜底+积压监控告警
+
+---
+
+## Q7: 缓存击穿防护（月初大量用户查账单）
+
+**你的回答：** Redisson分布式锁+随机过期时间，DB读写分离，请求级别缓存，限流降级，监控告警
+
+**评分：7/10**
+
+**参考答案补充：**
+- 区分概念：击穿=单个热点key过期，雪崩=大批key同时过期。随机过期时间解决的是雪崩
+- 击穿方案：Redisson锁+逻辑过期，抢到锁的线程异步刷新，抢不到的返回旧数据
+- 双重检查：加锁后再查一次缓存，防止重复回源
+- 预热：月初账单是可预测热点，凌晨定时任务批量预热
+- 本地缓存：Caffeine做L1缓存，TTL 10秒减少Redis访问
+
+---
+
+## Q8: 服务间调用选型（Feign vs Dubbo）+ 超时处理
+
+**你的回答：** 用Feign，Spring Cloud全家桶成本低，RESTful API，遇到过超时
+
+**评分：5/10**
+
+**参考答案要点：**
+- 选型三维度：HTTP协议跨语言友好、生态整合度高、QPS几千级性能够用
+- 超时实战：账户服务热点账户行锁竞争导致P999飙高，解决方案是区分服务配置不同超时时间
+- 熔断降级：Sentinel配置失败率50%触发熔断，降级逻辑记录补偿队列而非直接返回成功
+- 重试策略：只对读操作重试，写操作绝不重试防重复扣款
+
+---
+
+## Q9: Eureka vs Nacos选型 + 服务上下线感知
+
+**你的回答：** 没有思考过
+
+**参考答案要点：**
+- Nacos优势：AP/CP可切换、自带配置中心、服务端主动探测、持续维护、Web控制台
+- Eureka感知延迟最慢90秒（3个30s叠加）
+- 解决方案：优雅下线主动注销、缩短拉取间隔到10s、Ribbon重试切换节点、K8s preStop hook等待20s
+
+---
+
+## Q10: AI融入ERP生成业务单据的实现
+
+**你的回答：** 生成业务单据，封装业务API，集成免费大模型，MCP注册服务，提示词匹配字段，必录字段提示
+
+**评分：7/10**
+
+**参考答案补充：**
+- 完整流程：用户自然语言 → LLM意图识别+字段提取 → 必录字段校验追问 → MCP Tool调用 → 业务API → 生成单据 → 用户确认
+- 工具schema设计：每个工具有完整的参数描述、类型、required标记
+- 准确率保障：few-shot prompt + 业务校验 + 用户确认兜底
+
+---
+
+## Q11: MCP vs Function Calling区别00ms内。
 
 ---
 
