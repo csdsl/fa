@@ -161,6 +161,7 @@
             <button onclick="sendQuick('我想退货')">退换货</button>
             <button onclick="sendQuick('发货要多久')">物流咨询</button>
             <button onclick="sendQuick('怎么开发票')">开发票</button>
+            <button onclick="endSession()" style="background:#ff6b6b;color:#fff;border-color:#ff6b6b;">结束对话</button>
         </div>
 
         <div class="chat-input">
@@ -244,6 +245,30 @@ function getIntentLabel(intent) {
         'CHAT': '💬 闲聊'
     };
     return map[intent] || intent;
+}
+
+async function endSession() {
+    if (!confirm('确定结束本次对话？将生成对话摘要。')) return;
+
+    const typingDiv = addMessage('', 'bot typing');
+    typingDiv.innerHTML = '<span class="dot-animation">正在生成对话摘要</span>';
+
+    try {
+        const response = await fetch(`/cs/session/summary?sessionId=${sessionId}`);
+        const data = await response.json();
+        typingDiv.remove();
+
+        if (data.success) {
+            const s = data.summary;
+            const summaryText = `📝 对话摘要\n━━━━━━━━━━━━\n📌 摘要：${s.summary}\n🎯 意图：${s.userIntent}\n✅ 结果：${s.resolution}\n💬 消息数：${s.messageCount}条\n━━━━━━━━━━━━\n感谢您的咨询，再见！`;
+            addMessage(summaryText, 'bot');
+        } else {
+            addMessage('暂无对话记录，无法生成摘要。', 'bot');
+        }
+    } catch (error) {
+        typingDiv.remove();
+        addMessage('生成摘要失败，请稍后重试。', 'bot');
+    }
 }
 </script>
 </body>

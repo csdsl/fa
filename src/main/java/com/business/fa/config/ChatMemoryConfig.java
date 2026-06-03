@@ -1,29 +1,35 @@
 package com.business.fa.config;
 
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
+import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
 /**
- * ChatMemory 配置 — 控制历史消息窗口大小
+ * ChatMemory 配置 — 文件持久化 + 滑动窗口
  *
- * maxMessages(10) 表示每个会话只保留最近 10 条消息（约5轮对话）
- * 超出的旧消息不会发给模型，从而节省 token
+ * 对话历史存储在 data/memory/ 目录下，每个会话一个 JSON 文件
+ * 重启后自动加载，不会丢失对话记录
  *
- * 默认的自动配置没有限制，对话越长 token 消耗越大
+ * 滑动窗口 maxMessages(10) 控制发给模型的消息数量（节省 token）
+ * 但文件中会保存完整的对话历史（用于回溯查看）
  */
 @Configuration
 public class ChatMemoryConfig {
 
     @Bean
+    public ChatMemoryRepository chatMemoryRepository() {
+        return new FileChatMemoryRepository("data/memory");
+    }
+
+    @Bean
     @Primary
-    public ChatMemory chatMemory() {
+    public ChatMemory chatMemory(ChatMemoryRepository repository) {
         return MessageWindowChatMemory.builder()
-                .chatMemoryRepository(new InMemoryChatMemoryRepository())
-                .maxMessages(10)   // 只保留最近10条消息
+                .chatMemoryRepository(repository)
+                .maxMessages(10)   // 发给模型的最多10条，节省 token
                 .build();
     }
 }
