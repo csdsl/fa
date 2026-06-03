@@ -2,6 +2,7 @@ package com.business.fa.customerservice.controller;
 
 import com.business.fa.advisor.LoggingAdvisor;
 import com.business.fa.advisor.SensitiveWordAdvisor;
+import com.business.fa.advisor.TokenUsageAdvisor;
 import com.business.fa.customerservice.model.IntentResult;
 import com.business.fa.customerservice.model.IntentResult.Intent;
 import com.business.fa.customerservice.service.IntentRecognizer;
@@ -21,6 +22,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
+/**
+ * 智能路由客服 - 多轮意图识别 + 分流处理
+ */
 @RestController
 @RequestMapping("/smart")
 public class SmartServiceController {
@@ -42,6 +46,7 @@ public class SmartServiceController {
                                   VectorStore vectorStore,
                                   LoggingAdvisor loggingAdvisor,
                                   SensitiveWordAdvisor sensitiveWordAdvisor,
+                                  TokenUsageAdvisor tokenUsageAdvisor,
                                   CustomerOrderTool orderTool,
                                   RefundTool refundTool,
                                   TicketTool ticketTool) {
@@ -56,6 +61,7 @@ public class SmartServiceController {
                 .defaultAdvisors(
                         sensitiveWordAdvisor,
                         loggingAdvisor,
+                        tokenUsageAdvisor,
                         MessageChatMemoryAdvisor.builder(chatMemory).build(),
                         QuestionAnswerAdvisor.builder(vectorStore)
                                 .searchRequest(SearchRequest.builder().topK(3).build())
@@ -69,6 +75,7 @@ public class SmartServiceController {
                 .defaultAdvisors(
                         sensitiveWordAdvisor,
                         loggingAdvisor,
+                        tokenUsageAdvisor,
                         MessageChatMemoryAdvisor.builder(chatMemory).build()
                 )
                 .build();
@@ -79,6 +86,7 @@ public class SmartServiceController {
                 .defaultAdvisors(
                         sensitiveWordAdvisor,
                         loggingAdvisor,
+                        tokenUsageAdvisor,
                         MessageChatMemoryAdvisor.builder(chatMemory).build(),
                         QuestionAnswerAdvisor.builder(vectorStore)
                                 .searchRequest(SearchRequest.builder().topK(2).build())
@@ -92,6 +100,7 @@ public class SmartServiceController {
                 .defaultAdvisors(
                         sensitiveWordAdvisor,
                         loggingAdvisor,
+                        tokenUsageAdvisor,
                         MessageChatMemoryAdvisor.builder(chatMemory).build()
                 )
                 .build();

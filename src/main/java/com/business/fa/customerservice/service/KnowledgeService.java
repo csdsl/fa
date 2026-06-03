@@ -1,55 +1,49 @@
 package com.business.fa.customerservice.service;
 
+import com.business.fa.config.VectorStorePersistence;
 import com.business.fa.customerservice.model.KnowledgeDoc;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 知识库管理服务
+ * 知识库管理服务 - MySQL 持久化
  *
- * 职责：
- * - 文档上传 → 分块 → 向量化存储
- * - 文档删除（从向量库移除）
- * - 文档列表查询
+ * 文档元数据存 MySQL knowledge_doc 表
+ * 文档内容向量化后存 VectorStore（内存）
  */
 @Service
 public class KnowledgeService {
 
     private final VectorStore vectorStore;
+    private final JdbcTemplate jdbcTemplate;
+    private final VectorStorePersistence persistence;
 
-    // 用内存记录文档元数据（生产环境用数据库）
-    private final Map<String, KnowledgeDoc> docRegistry = new ConcurrentHashMap<>();
-
-    public KnowledgeService(VectorStore vectorStore) {
+    public KnowledgeService(VectorStore vectorStore, JdbcTemplate jdbcTemplate,
+                            VectorStorePersistence persistence) {
         this.vectorStore = vectorStore;
+        this.jdbcTemplate = jdbcTemplate;
+        this.persistence = persistence;
     }
 
     /**
-     * 上传文本内容，分块后存入向量库
-     *
-     * @param name   文档名称
-     * @param source 来源分类
-     * @param content 文本内容
-     * @return 文档记录
+     * 上传文本内容，分块后存入向量库 + 元数据存 MySQL
      */
     public KnowledgeDoc addDocument(String name, String source, String content) {
-        // 1. 按空行分段
         List<String> chunks = Arrays.stream(content.split("\n\n"))
                 .map(String::trim)
                 .filter(s -> !s.isBlank())
                 .toList();
 
-        // 2. 创建 Document 对象，带上元数据
         String docId = UUID.randomUUID().toString().substring(0, 8);
         List<String> chunkIds = new ArrayList<>();
-
         List<Document> documents = new ArrayList<>();
+
         for (int i = 0; i < chunks.size(); i++) {
             String chunkId = docId + "_" + i;
             chunkIds.add(chunkId);
@@ -58,19 +52,23 @@ public class KnowledgeService {
             documents.add(doc);
         }
 
-        // 3. 存入向量库（自动做 Embedding）
+        // 存入向量库
         vectorStore.add(documents);
 
-        // 4. 记录元数据
-        KnowledgeDoc knowledgeDoc = new KnowledgeDoc(
-                docId, name, source, chunks.size(), chunkIds, LocalDateTime.now());
-        docRegistry.put(docId, knowledgeDoc);
+        // 持久化向量数据
+        persistence.save();
 
-        return knowledgeDoc;
+        // 元数据存 MySQL
+        String chunkIdsJson = String.join(",", chunkIds);
+        jdbcTemplate.update(
+                "INSERT INTO knowledge_doc (id, name, source, chunk_count, chunk_ids) VALUES (?, ?, ?, ?, ?)",
+                docId, name, source, chunks.size(), chunkIdsJson);
+
+        return new KnowledgeDoc(docId, name, source, chunks.size(), chunkIds, LocalDateTime.now());
     }
 
     /**
-     * 上传文件内容
+     * 上传文件
      */
     public KnowledgeDoc addDocumentFromFile(String fileName, String source, byte[] fileBytes) {
         String content = new String(fileBytes, StandardCharsets.UTF_8);
@@ -78,17 +76,26 @@ public class KnowledgeService {
     }
 
     /**
-     * 删除文档（从向量库和注册表中移除）
+     * 删除文档
      */
     public boolean deleteDocument(String docId) {
-        KnowledgeDoc doc = docRegistry.get(docId);
-        if (doc == null) return false;
+        // 查元数据
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT chunk_ids FROM knowledge_doc WHERE id = ?", docId);
+        if (rows.isEmpty()) return false;
 
-        // 从向量库删除所有关联的 chunk
-        vectorStore.delete(doc.getChunkIds());
+        // 从向量库删除
+        String chunkIdsStr = (String) rows.get(0).get("chunk_ids");
+        if (chunkIdsStr != null && !chunkIdsStr.isBlank()) {
+            List<String> chunkIds = Arrays.asList(chunkIdsStr.split(","));
+            vectorStore.delete(chunkIds);
+        }
 
-        // 从注册表移除
-        docRegistry.remove(docId);
+        // 持久化向量数据
+        persistence.save();
+
+        // 从 MySQL 删除
+        jdbcTemplate.update("DELETE FROM knowledge_doc WHERE id = ?", docId);
         return true;
     }
 
@@ -96,13 +103,37 @@ public class KnowledgeService {
      * 获取所有文档列表
      */
     public List<KnowledgeDoc> listDocuments() {
-        return new ArrayList<>(docRegistry.values());
+        return jdbcTemplate.query(
+                "SELECT id, name, source, chunk_count, chunk_ids, create_time FROM knowledge_doc ORDER BY create_time DESC",
+                (rs, rowNum) -> {
+                    String chunkIdsStr = rs.getString("chunk_ids");
+                    List<String> chunkIds = chunkIdsStr != null
+                            ? Arrays.asList(chunkIdsStr.split(",")) : List.of();
+                    return new KnowledgeDoc(
+                            rs.getString("id"),
+                            rs.getString("name"),
+                            rs.getString("source"),
+                            rs.getInt("chunk_count"),
+                            chunkIds,
+                            rs.getTimestamp("create_time").toLocalDateTime()
+                    );
+                });
     }
 
     /**
-     * 获取单个文档详情
+     * 获取单个文档
      */
     public KnowledgeDoc getDocument(String docId) {
-        return docRegistry.get(docId);
+        List<KnowledgeDoc> docs = jdbcTemplate.query(
+                "SELECT id, name, source, chunk_count, chunk_ids, create_time FROM knowledge_doc WHERE id = ?",
+                (rs, rowNum) -> new KnowledgeDoc(
+                        rs.getString("id"),
+                        rs.getString("name"),
+                        rs.getString("source"),
+                        rs.getInt("chunk_count"),
+                        Arrays.asList(rs.getString("chunk_ids").split(",")),
+                        rs.getTimestamp("create_time").toLocalDateTime()
+                ), docId);
+        return docs.isEmpty() ? null : docs.get(0);
     }
 }

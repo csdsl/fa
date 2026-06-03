@@ -6,102 +6,104 @@ import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * 对话摘要服务
- *
- * 用轻量模型（qwen-turbo）生成对话摘要，节省成本
- * 摘要存储在内存中（生产环境存数据库）
+ * 对话摘要服务 - MySQL 持久化
  */
 @Service
 public class SummaryService {
 
     private final ChatClient summaryClient;
     private final ChatMemoryRepository memoryRepository;
+    private final JdbcTemplate jdbcTemplate;
 
-    // 存储摘要（生产环境用数据库）
-    private final Map<String, SessionSummary> summaries = new ConcurrentHashMap<>();
-
-    public SummaryService(OpenAiChatModel chatModel, ChatMemoryRepository memoryRepository) {
+    public SummaryService(OpenAiChatModel chatModel,
+                          ChatMemoryRepository memoryRepository,
+                          JdbcTemplate jdbcTemplate) {
         this.memoryRepository = memoryRepository;
+        this.jdbcTemplate = jdbcTemplate;
         this.summaryClient = ChatClient.builder(chatModel)
                 .defaultOptions(OpenAiChatOptions.builder()
-                        .model("qwen-turbo")  // 用便宜模型生成摘要
+                        .model("qwen-turbo")
                         .temperature(0.0)
                         .build())
                 .build();
     }
 
     /**
-     * 为指定会话生成摘要
+     * 为指定会话生成摘要并存入数据库
      */
     public SessionSummary generateSummary(String sessionId) {
-        // 1. 获取对话历史
         List<Message> messages = memoryRepository.findByConversationId(sessionId);
-        if (messages.isEmpty()) {
-            return null;
-        }
+        if (messages.isEmpty()) return null;
 
-        // 2. 拼接对话内容
         String conversation = messages.stream()
                 .map(msg -> {
                     String role = switch (msg.getMessageType().name()) {
-                        case "USER" -> "用户";
-                        case "ASSISTANT" -> "客服";
-                        default -> "系统";
+                        case "USER" -> "user";
+                        case "ASSISTANT" -> "agent";
+                        default -> "system";
                     };
-                    return role + "：" + msg.getText();
+                    return role + ": " + msg.getText();
                 })
                 .collect(Collectors.joining("\n"));
 
-        // 3. 用模型生成结构化摘要
         record SummaryResult(String summary, String userIntent, String resolution) {}
 
         SummaryResult result = summaryClient.prompt()
-                .system("""
-                        你是一个对话分析助手。根据客服对话内容，生成结构化摘要。
-                        
-                        要求：
-                        - summary：用一句话概括对话内容（不超过50字）
-                        - userIntent：用户的主要意图（如：咨询退货政策、查询订单物流、投诉服务等）
-                        - resolution：解决情况，只能是以下之一：已解决、未解决、转人工
-                        """)
-                .user("以下是客服对话记录：\n\n" + conversation)
+                .system("你是一个对话分析助手。根据客服对话内容生成中文摘要。summary用一句中文概括（不超过50字），userIntent用中文描述用户意图，resolution只能是：已解决、未解决、转人工。所有字段必须用中文回答。")
+                .user(conversation)
                 .call()
                 .entity(SummaryResult.class);
 
-        // 4. 构建摘要对象并存储
-        SessionSummary summary = new SessionSummary(
-                sessionId,
-                result != null ? result.summary() : "无法生成摘要",
-                result != null ? result.userIntent() : "未知",
-                result != null ? result.resolution() : "未知",
-                messages.size(),
-                LocalDateTime.now()
-        );
+        String summary = result != null ? result.summary() : "unknown";
+        String intent = result != null ? result.userIntent() : "unknown";
+        String resolution = result != null ? result.resolution() : "unknown";
 
-        summaries.put(sessionId, summary);
-        return summary;
+        // 存入 MySQL（REPLACE INTO 支持重复生成）
+        jdbcTemplate.update(
+                "REPLACE INTO session_summary (session_id, summary, user_intent, resolution, message_count) VALUES (?, ?, ?, ?, ?)",
+                sessionId, summary, intent, resolution, messages.size());
+
+        return new SessionSummary(sessionId, summary, intent, resolution, messages.size(), LocalDateTime.now());
     }
 
     /**
      * 获取已生成的摘要
      */
     public SessionSummary getSummary(String sessionId) {
-        return summaries.get(sessionId);
+        List<SessionSummary> list = jdbcTemplate.query(
+                "SELECT session_id, summary, user_intent, resolution, message_count, create_time FROM session_summary WHERE session_id = ?",
+                (rs, rowNum) -> new SessionSummary(
+                        rs.getString("session_id"),
+                        rs.getString("summary"),
+                        rs.getString("user_intent"),
+                        rs.getString("resolution"),
+                        rs.getInt("message_count"),
+                        rs.getTimestamp("create_time").toLocalDateTime()
+                ), sessionId);
+        return list.isEmpty() ? null : list.get(0);
     }
 
     /**
      * 获取所有摘要列表
      */
     public List<SessionSummary> listSummaries() {
-        return List.copyOf(summaries.values());
+        return jdbcTemplate.query(
+                "SELECT session_id, summary, user_intent, resolution, message_count, create_time FROM session_summary ORDER BY create_time DESC",
+                (rs, rowNum) -> new SessionSummary(
+                        rs.getString("session_id"),
+                        rs.getString("summary"),
+                        rs.getString("user_intent"),
+                        rs.getString("resolution"),
+                        rs.getInt("message_count"),
+                        rs.getTimestamp("create_time").toLocalDateTime()
+                ));
     }
 }

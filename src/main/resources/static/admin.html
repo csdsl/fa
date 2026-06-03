@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能客服 - 管理后台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f6fa;
+            color: #2d3436;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            padding: 20px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header h1 { font-size: 20px; }
+        .header a { color: #fff; text-decoration: none; opacity: 0.8; font-size: 14px; }
+        .header a:hover { opacity: 1; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+            background: #fff;
+            border-radius: 8px;
+            padding: 4px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+        .tabs button {
+            flex: 1;
+            padding: 10px 16px;
+            border: none;
+            background: transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #636e72;
+            transition: all 0.2s;
+        }
+        .tabs button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+        }
+        .card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+        .card h3 { font-size: 15px; color: #636e72; margin-bottom: 12px; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            text-align: center;
+        }
+        .stat-card .number {
+            font-size: 28px;
+            font-weight: 700;
+            color: #667eea;
+        }
+        .stat-card .label {
+            font-size: 13px;
+            color: #636e72;
+            margin-top: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        th, td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        th { color: #636e72; font-weight: 500; font-size: 13px; }
+        tr:hover td { background: #f8f9ff; }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+        .badge-green { background: #e8f8e8; color: #27ae60; }
+        .badge-blue { background: #e8eaff; color: #667eea; }
+        .badge-red { background: #ffe8e8; color: #e74c3c; }
+        .panel { display: none; }
+        .panel.active { display: block; }
+        .refresh-btn {
+            padding: 6px 14px;
+            background: #667eea;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .refresh-btn:hover { opacity: 0.9; }
+        .empty { text-align: center; padding: 40px; color: #b2bec3; }
+        .session-msg { margin: 4px 0; font-size: 13px; }
+        .session-msg .role { font-weight: 600; color: #667eea; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>智能客服管理后台</h1>
+        <a href="/">← 返回客服聊天</a>
+    </div>
+
+    <div class="container">
+        <div class="tabs">
+            <button class="active" onclick="switchTab('token')">Token 用量</button>
+            <button onclick="switchTab('sessions')">对话记录</button>
+            <button onclick="switchTab('knowledge')">知识库</button>
+            <button onclick="switchTab('summaries')">对话摘要</button>
+        </div>
+
+        <!-- Token 用量面板 -->
+        <div id="panel-token" class="panel active">
+            <div class="stats-grid" id="token-stats"></div>
+            <div class="card">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h3>按天统计</h3>
+                    <button class="refresh-btn" onclick="loadTokenUsage()">刷新</button>
+                </div>
+                <table>
+                    <thead><tr><th>日期</th><th>请求次数</th><th>输入 Token</th><th>输出 Token</th><th>总 Token</th></tr></thead>
+                    <tbody id="daily-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 对话记录面板 -->
+        <div id="panel-sessions" class="panel">
+            <div class="card">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h3>会话列表</h3>
+                    <button class="refresh-btn" onclick="loadSessions()">刷新</button>
+                </div>
+                <table>
+                    <thead><tr><th>会话ID</th><th>操作</th></tr></thead>
+                    <tbody id="sessions-table"></tbody>
+                </table>
+            </div>
+            <div class="card" id="session-detail" style="display:none">
+                <h3>对话详情</h3>
+                <div id="session-messages"></div>
+            </div>
+        </div>
+
+        <!-- 知识库面板 -->
+        <div id="panel-knowledge" class="panel">
+            <div class="card">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h3>知识文档列表</h3>
+                    <button class="refresh-btn" onclick="loadKnowledge()">刷新</button>
+                </div>
+                <table>
+                    <thead><tr><th>ID</th><th>名称</th><th>分类</th><th>块数</th><th>创建时间</th><th>操作</th></tr></thead>
+                    <tbody id="knowledge-table"></tbody>
+                </table>
+                <div style="margin-top:16px;padding-top:16px;border-top:1px solid #f0f0f0">
+                    <h3 style="margin-bottom:8px">添加知识</h3>
+                    <input id="kb-name" placeholder="文档名称" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;margin-right:8px">
+                    <input id="kb-source" placeholder="分类" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;margin-right:8px">
+                    <br><br>
+                    <textarea id="kb-content" placeholder="文档内容（段落间用空行分隔）" rows="4" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:13px"></textarea>
+                    <br><br>
+                    <button class="refresh-btn" onclick="addKnowledge()">添加</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 对话摘要面板 -->
+        <div id="panel-summaries" class="panel">
+            <div class="card">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h3>对话摘要列表</h3>
+                    <button class="refresh-btn" onclick="loadSummaries()">刷新</button>
+                </div>
+                <table>
+                    <thead><tr><th>会话ID</th><th>摘要</th><th>用户意图</th><th>解决情况</th><th>消息数</th><th>时间</th></tr></thead>
+                    <tbody id="summaries-table"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+<script>
+function switchTab(name) {
+    document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('panel-' + name).classList.add('active');
+
+    if (name === 'token') loadTokenUsage();
+    if (name === 'sessions') loadSessions();
+    if (name === 'knowledge') loadKnowledge();
+    if (name === 'summaries') loadSummaries();
+}
+
+async function loadTokenUsage() {
+    const res = await fetch('/admin/token-usage');
+    const data = await res.json();
+    if (!data.success) return;
+
+    const o = data.overall;
+    document.getElementById('token-stats').innerHTML = `
+        <div class="stat-card"><div class="number">${o.totalRequests}</div><div class="label">总请求数</div></div>
+        <div class="stat-card"><div class="number">${o.totalPromptTokens}</div><div class="label">输入 Token</div></div>
+        <div class="stat-card"><div class="number">${o.totalCompletionTokens}</div><div class="label">输出 Token</div></div>
+        <div class="stat-card"><div class="number">${o.totalTokens}</div><div class="label">总 Token</div></div>
+    `;
+
+    const daily = data.daily;
+    const tbody = document.getElementById('daily-table');
+    tbody.innerHTML = daily.map(u => `<tr><td>${u.date}</td><td>${u.requests}</td><td>${u.promptTokens}</td><td>${u.completionTokens}</td><td>${u.totalTokens}</td></tr>`)
+        .join('') || '<tr><td colspan="5" class="empty">暂无数据</td></tr>';
+}
+
+async function loadSessions() {
+    const res = await fetch('/cs/session/list');
+    const data = await res.json();
+    if (!data.success) return;
+
+    const tbody = document.getElementById('sessions-table');
+    tbody.innerHTML = data.sessions.map(id => `
+        <tr>
+            <td>${id}</td>
+            <td>
+                <button class="refresh-btn" onclick="viewSession('${id}')">查看</button>
+                <button class="refresh-btn" style="background:#27ae60" onclick="genSummary('${id}')">生成摘要</button>
+                <button class="refresh-btn" style="background:#e74c3c" onclick="deleteSession('${id}')">删除</button>
+            </td>
+        </tr>
+    `).join('') || '<tr><td colspan="2" class="empty">暂无会话</td></tr>';
+}
+
+async function viewSession(sessionId) {
+    const res = await fetch('/cs/session/detail?sessionId=' + sessionId);
+    const data = await res.json();
+    if (!data.success) return;
+
+    const el = document.getElementById('session-detail');
+    el.style.display = 'block';
+    document.getElementById('session-messages').innerHTML = data.messages.map(m => `
+        <div class="session-msg"><span class="role">${m.role === 'user' ? '用户' : '客服'}：</span>${m.content}</div>
+    `).join('');
+}
+
+async function genSummary(sessionId) {
+    const res = await fetch('/cs/session/summary?sessionId=' + sessionId);
+    const data = await res.json();
+    if (data.success) {
+        alert('摘要：' + data.summary.summary + '\n意图：' + data.summary.userIntent + '\n结果：' + data.summary.resolution);
+    } else {
+        alert(data.error);
+    }
+}
+
+async function deleteSession(sessionId) {
+    if (!confirm('确定删除会话 ' + sessionId + '？')) return;
+    await fetch('/cs/session/' + sessionId, { method: 'DELETE' });
+    loadSessions();
+}
+
+async function loadKnowledge() {
+    const res = await fetch('/cs/knowledge/list');
+    const data = await res.json();
+    if (!data.success) return;
+
+    const tbody = document.getElementById('knowledge-table');
+    tbody.innerHTML = data.docs.map(d => `
+        <tr>
+            <td>${d.id}</td>
+            <td>${d.name}</td>
+            <td><span class="badge badge-blue">${d.source}</span></td>
+            <td>${d.chunkCount}</td>
+            <td>${d.createTime.substring(0, 16)}</td>
+            <td><button class="refresh-btn" style="background:#e74c3c" onclick="deleteKnowledge('${d.id}')">删除</button></td>
+        </tr>
+    `).join('') || '<tr><td colspan="6" class="empty">暂无知识文档</td></tr>';
+}
+
+async function deleteKnowledge(docId) {
+    if (!confirm('确定删除该知识文档？')) return;
+    await fetch('/cs/knowledge/' + docId, { method: 'DELETE' });
+    loadKnowledge();
+}
+
+async function addKnowledge() {
+    const name = document.getElementById('kb-name').value.trim();
+    const source = document.getElementById('kb-source').value.trim() || 'general';
+    const content = document.getElementById('kb-content').value.trim();
+    if (!content) { alert('content cannot be empty'); return; }
+
+    const res = await fetch('/cs/knowledge/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name || 'unnamed', source, content })
+    });
+    const data = await res.json();
+    if (data.success) {
+        alert('added ' + data.doc.chunkCount + ' chunks');
+        document.getElementById('kb-name').value = '';
+        document.getElementById('kb-source').value = '';
+        document.getElementById('kb-content').value = '';
+        loadKnowledge();
+    } else {
+        alert(data.error);
+    }
+}
+
+async function loadSummaries() {
+    const res = await fetch('/cs/session/summaries');
+    const data = await res.json();
+    if (!data.success) return;
+
+    const tbody = document.getElementById('summaries-table');
+    tbody.innerHTML = data.summaries.map(s => `
+        <tr>
+            <td>${s.sessionId}</td>
+            <td>${s.summary}</td>
+            <td><span class="badge badge-blue">${s.userIntent}</span></td>
+            <td><span class="badge ${s.resolution === '已解决' ? 'badge-green' : 'badge-red'}">${s.resolution}</span></td>
+            <td>${s.messageCount}</td>
+            <td>${s.createTime.substring(0, 16)}</td>
+        </tr>
+    `).join('') || '<tr><td colspan="6" class="empty">暂无摘要</td></tr>';
+}
+
+// 初始加载
+loadTokenUsage();
+</script>
+</body>
+</html>
