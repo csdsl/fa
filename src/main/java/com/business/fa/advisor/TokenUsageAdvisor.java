@@ -77,10 +77,11 @@ public class TokenUsageAdvisor implements BaseAdvisor {
                 sessionStats.computeIfAbsent(sessionId, k -> new SessionUsage())
                         .add(prompt, completion);
 
-                // 持久化到 MySQL
+                // 持久化到 MySQL（带租户ID）
+                String tenantId = com.business.fa.tenant.TenantContext.getTenantId();
                 jdbcTemplate.update(
-                        "INSERT INTO token_usage (session_id, prompt_tokens, completion_tokens, total_tokens) VALUES (?, ?, ?, ?)",
-                        sessionId, prompt, completion, prompt + completion);
+                        "INSERT INTO token_usage (tenant_id, session_id, prompt_tokens, completion_tokens, total_tokens) VALUES (?, ?, ?, ?, ?)",
+                        tenantId, sessionId, prompt, completion, prompt + completion);
             }
         } catch (Exception e) {
             // ignore

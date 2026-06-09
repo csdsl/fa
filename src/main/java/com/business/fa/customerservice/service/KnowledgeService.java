@@ -58,11 +58,12 @@ public class KnowledgeService {
         // 持久化向量数据
         persistence.save();
 
-        // 元数据存 MySQL
+        // 元数据存 MySQL（带租户ID）
+        String tenantId = com.business.fa.tenant.TenantContext.getTenantId();
         String chunkIdsJson = String.join(",", chunkIds);
         jdbcTemplate.update(
-                "INSERT INTO knowledge_doc (id, name, source, chunk_count, chunk_ids) VALUES (?, ?, ?, ?, ?)",
-                docId, name, source, chunks.size(), chunkIdsJson);
+                "INSERT INTO knowledge_doc (id, tenant_id, name, source, chunk_count, chunk_ids) VALUES (?, ?, ?, ?, ?, ?)",
+                docId, tenantId, name, source, chunks.size(), chunkIdsJson);
 
         return new KnowledgeDoc(docId, name, source, chunks.size(), chunkIds, LocalDateTime.now());
     }
@@ -79,9 +80,9 @@ public class KnowledgeService {
      * 删除文档
      */
     public boolean deleteDocument(String docId) {
-        // 查元数据
+        String tenantId = com.business.fa.tenant.TenantContext.getTenantId();
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT chunk_ids FROM knowledge_doc WHERE id = ?", docId);
+                "SELECT chunk_ids FROM knowledge_doc WHERE id = ? AND tenant_id = ?", docId, tenantId);
         if (rows.isEmpty()) return false;
 
         // 从向量库删除
@@ -95,7 +96,7 @@ public class KnowledgeService {
         persistence.save();
 
         // 从 MySQL 删除
-        jdbcTemplate.update("DELETE FROM knowledge_doc WHERE id = ?", docId);
+        jdbcTemplate.update("DELETE FROM knowledge_doc WHERE id = ? AND tenant_id = ?", docId, tenantId);
         return true;
     }
 
@@ -103,8 +104,9 @@ public class KnowledgeService {
      * 获取所有文档列表
      */
     public List<KnowledgeDoc> listDocuments() {
+        String tenantId = com.business.fa.tenant.TenantContext.getTenantId();
         return jdbcTemplate.query(
-                "SELECT id, name, source, chunk_count, chunk_ids, create_time FROM knowledge_doc ORDER BY create_time DESC",
+                "SELECT id, name, source, chunk_count, chunk_ids, create_time FROM knowledge_doc WHERE tenant_id = ? ORDER BY create_time DESC",
                 (rs, rowNum) -> {
                     String chunkIdsStr = rs.getString("chunk_ids");
                     List<String> chunkIds = chunkIdsStr != null
@@ -117,7 +119,7 @@ public class KnowledgeService {
                             chunkIds,
                             rs.getTimestamp("create_time").toLocalDateTime()
                     );
-                });
+                }, tenantId);
     }
 
     /**
