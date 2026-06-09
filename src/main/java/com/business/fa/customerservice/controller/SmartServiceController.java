@@ -1,6 +1,7 @@
 package com.business.fa.customerservice.controller;
 
 import com.business.fa.advisor.LoggingAdvisor;
+import com.business.fa.advisor.SemanticCacheAdvisor;
 import com.business.fa.advisor.SensitiveWordAdvisor;
 import com.business.fa.advisor.TokenUsageAdvisor;
 import com.business.fa.customerservice.model.IntentResult;
@@ -39,6 +40,7 @@ public class SmartServiceController {
     private final CustomerOrderTool orderTool;
     private final RefundTool refundTool;
     private final TicketTool ticketTool;
+    private final SemanticCacheAdvisor semanticCache;
 
     public SmartServiceController(IntentRecognizer intentRecognizer,
                                   OpenAiChatModel chatModel,
@@ -47,6 +49,7 @@ public class SmartServiceController {
                                   LoggingAdvisor loggingAdvisor,
                                   SensitiveWordAdvisor sensitiveWordAdvisor,
                                   TokenUsageAdvisor tokenUsageAdvisor,
+                                  SemanticCacheAdvisor semanticCacheAdvisor,
                                   CustomerOrderTool orderTool,
                                   RefundTool refundTool,
                                   TicketTool ticketTool) {
@@ -54,6 +57,7 @@ public class SmartServiceController {
         this.orderTool = orderTool;
         this.refundTool = refundTool;
         this.ticketTool = ticketTool;
+        this.semanticCache = semanticCacheAdvisor;
 
         this.consultClient = ChatClient.builder(chatModel)
                 .defaultOptions(OpenAiChatOptions.builder().model("qwen-plus").build())
@@ -120,8 +124,28 @@ public class SmartServiceController {
             @RequestParam String message,
             @RequestParam(defaultValue = "default") String sessionId) {
         try {
+            // 1. 先查语义缓存
+            String cachedAnswer = semanticCache.get(message);
+            if (cachedAnswer != null) {
+                return ResponseEntity.ok(Map.of(
+                        "success", true,
+                        "reply", cachedAnswer,
+                        "intent", "CACHED",
+                        "confidence", "high",
+                        "intentSummary", "cache hit",
+                        "sessionId", sessionId,
+                        "cached", true
+                ));
+            }
+
+            // 2. 缓存未命中，走意图识别 + 路由
             IntentResult intentResult = intentRecognizer.recognize(message);
             String response = route(intentResult.intent(), message, sessionId);
+
+            // 3. 把问答对存入缓存（订单查询类不缓存，因为结果动态变化）
+            if (intentResult.intent() != Intent.ORDER_QUERY && response != null) {
+                semanticCache.put(message, response);
+            }
 
             return ResponseEntity.ok(Map.of(
                     "success", true,
@@ -129,7 +153,8 @@ public class SmartServiceController {
                     "intent", intentResult.intent().name(),
                     "confidence", intentResult.confidence(),
                     "intentSummary", intentResult.summary(),
-                    "sessionId", sessionId
+                    "sessionId", sessionId,
+                    "cached", false
             ));
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of(
