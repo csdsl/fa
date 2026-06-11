@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token 中转站</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #1a1a2e;
+        }
+        .page-wrapper {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+        .brand {
+            text-align: center;
+            margin-bottom: 32px;
+            color: #fff;
+        }
+        .brand h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+        .brand p { font-size: 14px; opacity: 0.8; margin-top: 6px; }
+        .main-card {
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            width: 100%;
+            max-width: 480px;
+            overflow: hidden;
+        }
+        .card-section {
+            padding: 24px 28px;
+            border-bottom: 1px solid #f1f3f5;
+        }
+        .card-section:last-child { border-bottom: none; }
+        .card-section h3 {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #868e96;
+            margin-bottom: 14px;
+            font-weight: 600;
+        }
+
+        /* 登录 */
+        .login-container { padding: 48px 32px; }
+        .login-container h2 { font-size: 22px; text-align: center; margin-bottom: 24px; color: #1a1a2e; }
+        .input-group { position: relative; margin-bottom: 16px; }
+        .input-group input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            font-size: 15px;
+            transition: border-color 0.2s;
+            outline: none;
+        }
+        .input-group input:focus { border-color: #667eea; }
+        .input-group input::placeholder { color: #adb5bd; }
+        .btn-primary {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(102,126,234,0.4); }
+        .btn-primary:active { transform: translateY(0); }
+        .btn-green {
+            background: linear-gradient(135deg, #00b894, #00cec9);
+        }
+        .btn-green:hover { box-shadow: 0 4px 12px rgba(0,184,148,0.4); }
+        .btn-outline {
+            width: 100%;
+            padding: 14px;
+            background: transparent;
+            color: #667eea;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: border-color 0.2s;
+        }
+        .btn-outline:hover { border-color: #667eea; }
+        .link-text { text-align: center; margin-top: 20px; font-size: 13px; color: #868e96; }
+        .link-text a { color: #667eea; text-decoration: none; font-weight: 500; }
+        .link-text a:hover { text-decoration: underline; }
+
+        /* 余额卡片 */
+        .balance-card {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 16px;
+            padding: 24px;
+            color: #fff;
+            position: relative;
+            overflow: hidden;
+        }
+        .balance-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -30%;
+            width: 200px;
+            height: 200px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+        }
+        .balance-card .greeting { font-size: 14px; opacity: 0.9; }
+        .balance-card .amount { font-size: 36px; font-weight: 700; margin: 8px 0; }
+        .balance-card .amount-label { font-size: 12px; opacity: 0.7; }
+        .balance-meta { display: flex; justify-content: space-between; margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.2); }
+        .balance-meta-item { text-align: center; }
+        .balance-meta-item .value { font-size: 16px; font-weight: 600; }
+        .balance-meta-item .label { font-size: 11px; opacity: 0.7; margin-top: 2px; }
+
+        /* 进度条 */
+        .usage-progress { margin-top: 12px; }
+        .progress-track { height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; overflow: hidden; }
+        .progress-fill { height: 100%; background: #ffd43b; border-radius: 3px; transition: width 0.5s ease; }
+        .progress-text { font-size: 11px; opacity: 0.7; margin-top: 6px; text-align: right; }
+
+        /* 套餐 */
+        .plans-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .plan-card {
+            border: 2px solid #f1f3f5;
+            border-radius: 14px;
+            padding: 18px 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+        .plan-card:hover { border-color: #667eea; background: #f8f9ff; }
+        .plan-card.selected { border-color: #667eea; background: #f0f3ff; box-shadow: 0 0 0 3px rgba(102,126,234,0.1); }
+        .plan-card .tokens { font-size: 20px; font-weight: 700; color: #1a1a2e; }
+        .plan-card .token-unit { font-size: 12px; color: #868e96; }
+        .plan-card .price { font-size: 18px; font-weight: 700; color: #667eea; margin-top: 6px; }
+        .plan-card .price-unit { font-size: 12px; color: #868e96; }
+        .plan-card.popular::after {
+            content: '推荐';
+            position: absolute;
+            top: -1px;
+            right: -1px;
+            background: #667eea;
+            color: #fff;
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 0 12px 0 8px;
+        }
+
+        /* 充值码 */
+        .code-input {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            font-size: 18px;
+            text-align: center;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-family: monospace;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .code-input:focus { border-color: #00b894; }
+
+        /* 支付弹窗 */
+        .pay-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 20px;
+        }
+        .pay-dialog {
+            background: #fff;
+            border-radius: 20px;
+            padding: 32px;
+            width: 100%;
+            max-width: 380px;
+            text-align: center;
+        }
+        .pay-dialog h3 { font-size: 18px; margin-bottom: 4px; }
+        .pay-dialog .pay-tip { font-size: 12px; color: #e74c3c; margin-bottom: 16px; }
+        .pay-dialog .qr-code { margin: 16px auto; }
+        .pay-dialog .qr-code img { width: 180px; height: 180px; border-radius: 12px; object-fit: contain; border: 1px solid #f1f3f5; }
+        .pay-dialog .pay-info { font-size: 14px; color: #495057; margin: 12px 0; }
+        .pay-dialog .pay-info strong { color: #e74c3c; font-size: 20px; }
+        .pay-dialog .order-id { font-size: 12px; color: #adb5bd; margin-bottom: 16px; }
+
+        /* 订单 */
+        .order-list { max-height: 200px; overflow-y: auto; }
+        .order-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f8f9fa; }
+        .order-row:last-child { border-bottom: none; }
+        .order-row .order-left .name { font-size: 14px; font-weight: 500; }
+        .order-row .order-left .time { font-size: 11px; color: #adb5bd; margin-top: 2px; }
+        .order-row .order-right { text-align: right; }
+        .order-row .order-right .price { font-size: 14px; font-weight: 600; }
+        .order-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 500;
+            margin-top: 2px;
+        }
+        .tag-pending { background: #fff3bf; color: #e67700; }
+        .tag-paid { background: #d3f9d8; color: #2b8a3e; }
+        .tag-confirmed { background: #d3f9d8; color: #2b8a3e; }
+        .tag-rejected { background: #ffe3e3; color: #c92a2a; }
+
+        /* 消息 */
+        .msg { padding: 10px 14px; border-radius: 10px; font-size: 13px; margin-top: 12px; text-align: center; }
+        .msg-success { background: #d3f9d8; color: #2b8a3e; }
+        .msg-error { background: #ffe3e3; color: #c92a2a; }
+
+        /* 账户信息 */
+        .info-list .info-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f8f9fa; font-size: 14px; }
+        .info-list .info-item:last-child { border-bottom: none; }
+        .info-list .info-item .key { color: #868e96; }
+        .info-list .info-item .val { font-weight: 500; }
+
+        .hidden { display: none !important; }
+        .logout-btn {
+            position: absolute;
+            top: 42px;
+            right: 20px;
+            color: #fff;
+            opacity: 0.7;
+            font-size: 13px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.15);
+            padding: 4px 12px;
+            border-radius: 6px;
+            border: none;
+        }
+        .logout-btn:hover { opacity: 1; }
+    </style>
+</head>
+<body>
+    <div class="page-wrapper" style="position:relative">
+        <button class="logout-btn hidden" id="logout-btn" onclick="logout()">退出</button>
+
+        <div class="brand">
+            <h1>⚡ Token 中转站</h1>
+            <p>高速稳定的 AI API 服务</p>
+        </div>
+
+        <!-- ========== 登录 / 注册 ========== -->
+        <div id="login-view" class="main-card">
+            <div class="login-container">
+                <h2>登录账户</h2>
+                <div class="input-group">
+                    <input id="login-token" placeholder="输入你的 API Key (sk-relay-...)" type="password">
+                </div>
+                <button class="btn-primary" onclick="login()">登录</button>
+                <div class="msg msg-error hidden" id="login-error"></div>
+                <div class="link-text">还没有账号？<a href="javascript:void(0)" onclick="showRegister()">免费注册</a></div>
+            </div>
+
+            <!-- 注册 -->
+            <div class="login-container hidden" id="register-card" style="border-top:1px solid #f1f3f5">
+                <h2>注册新账户</h2>
+                <div class="input-group">
+                    <input id="reg-name" placeholder="输入用户名">
+                </div>
+                <button class="btn-green btn-primary" onclick="register()">注册并获取 API Key</button>
+                <div class="msg msg-error hidden" id="reg-error"></div>
+                <div class="link-text"><a href="javascript:void(0)" onclick="hideRegister()">已有账号，去登录</a></div>
+            </div>
+
+            <!-- 注册成功 -->
+            <div class="login-container hidden" id="reg-success-card" style="border-top:1px solid #f1f3f5">
+                <h2>🎉 注册成功</h2>
+                <p style="text-align:center;font-size:13px;color:#868e96;margin-bottom:16px">请立即保存你的 API Key，后续无法再查看</p>
+                <div style="background:#f8f9fa;padding:14px;border-radius:12px;font-family:monospace;font-size:14px;word-break:break-all;text-align:center;border:1px solid #e9ecef" id="reg-token-value"></div>
+                <button class="btn-primary" style="margin-top:16px" onclick="copyRegToken()">复制 API Key</button>
+                <button class="btn-outline" onclick="useNewToken()">立即使用此 Key 登录</button>
+            </div>
+        </div>
+
+        <!-- ========== 用户主面板 ========== -->
+        <div id="user-view" class="main-card hidden">
+            <!-- 余额 -->
+            <div class="card-section" style="padding:0">
+                <div class="balance-card">
+                    <div class="greeting">👋 <span id="user-name"></span></div>
+                    <div class="amount" id="stat-remaining">-</div>
+                    <div class="amount-label">剩余可用额度 (tokens)</div>
+                    <div class="usage-progress">
+                        <div class="progress-track"><div class="progress-fill" id="usage-bar" style="width:0%"></div></div>
+                        <div class="progress-text" id="usage-text">-</div>
+                    </div>
+                    <div class="balance-meta">
+                        <div class="balance-meta-item"><div class="value" id="stat-used">0</div><div class="label">已使用</div></div>
+                        <div class="balance-meta-item"><div class="value" id="stat-quota">0</div><div class="label">总额度</div></div>
+                        <div class="balance-meta-item"><div class="value" id="stat-requests">0</div><div class="label">请求数</div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 在线充值 -->
+            <div class="card-section">
+                <h3>💎 在线充值</h3>
+                <div class="plans-grid">
+                    <div class="plan-card" onclick="selectPlan(this, '基础包', 1000000, 5)">
+                        <div class="tokens">100<span class="token-unit">万</span></div>
+                        <div class="price">¥5</div>
+                    </div>
+                    <div class="plan-card popular" onclick="selectPlan(this, '标准包', 5000000, 20)">
+                        <div class="tokens">500<span class="token-unit">万</span></div>
+                        <div class="price">¥20</div>
+                    </div>
+                    <div class="plan-card" onclick="selectPlan(this, '高级包', 10000000, 35)">
+                        <div class="tokens">1000<span class="token-unit">万</span></div>
+                        <div class="price">¥35</div>
+                    </div>
+                    <div class="plan-card" onclick="selectPlan(this, '旗舰包', 50000000, 150)">
+                        <div class="tokens">5000<span class="token-unit">万</span></div>
+                        <div class="price">¥150</div>
+                    </div>
+                </div>
+                <button class="btn-primary hidden" id="pay-btn" style="margin-top:16px" onclick="createOrder()">立即购买</button>
+                <div class="hidden" id="pay-type-area" style="margin-top:12px;display:flex;gap:8px;justify-content:center">
+                    <label style="cursor:pointer;padding:8px 16px;border:2px solid #e9ecef;border-radius:8px;font-size:13px" id="type-alipay" onclick="selectPayType('alipay')">
+                        <input type="radio" name="paytype" value="alipay" checked style="margin-right:4px">支付宝
+                    </label>
+                    <label style="cursor:pointer;padding:8px 16px;border:2px solid #e9ecef;border-radius:8px;font-size:13px" id="type-wechat" onclick="selectPayType('wechat')">
+                        <input type="radio" name="paytype" value="wechat" style="margin-right:4px">微信
+                    </label>
+                </div>
+            </div>
+
+            <!-- 兑换充值码 -->
+            <div class="card-section">
+                <h3>🎟️ 兑换充值码</h3>
+                <input class="code-input" id="redeem-code" placeholder="XXXX-XXXX-XXXX" maxlength="14">
+                <button class="btn-green btn-primary" style="margin-top:12px" onclick="redeem()">兑换</button>
+                <div class="msg msg-success hidden" id="redeem-success"></div>
+                <div class="msg msg-error hidden" id="redeem-error"></div>
+            </div>
+
+            <!-- 账户信息 -->
+            <div class="card-section">
+                <h3>📋 账户信息</h3>
+                <div class="info-list">
+                    <div class="info-item"><span class="key">创建时间</span><span class="val" id="info-create">-</span></div>
+                    <div class="info-item"><span class="key">过期时间</span><span class="val" id="info-expire">-</span></div>
+                </div>
+            </div>
+
+            <!-- 我的订单 -->
+            <div class="card-section">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h3 style="margin-bottom:0">🧾 我的订单</h3>
+                    <a href="javascript:void(0)" onclick="loadMyOrders()" style="font-size:12px;color:#667eea">刷新</a>
+                </div>
+                <div class="order-list" id="my-orders" style="margin-top:10px"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 支付弹窗 -->
+    <div class="pay-overlay hidden" id="pay-overlay">
+        <div class="pay-dialog">
+            <h3>等待支付确认</h3>
+            <p class="pay-tip">⏰ 请在新窗口完成支付，支付成功后自动到账</p>
+            <div style="margin:24px 0">
+                <div style="width:60px;height:60px;margin:0 auto;border:4px solid #f1f3f5;border-top-color:#667eea;border-radius:50%;animation:spin 1s linear infinite"></div>
+            </div>
+            <div class="pay-info">支付金额：<strong id="pay-amount">¥0</strong></div>
+            <div class="order-id">订单号：<span id="pay-order-id">-</span></div>
+            <p style="font-size:13px;color:#868e96;margin:12px 0">支付完成后请耐心等待，系统将自动确认...</p>
+            <button class="btn-outline" onclick="cancelPay()">取消</button>
+            <div class="msg msg-success hidden" id="pay-success"></div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+
+<script>
+let currentToken = localStorage.getItem('relay_user_token') || '';
+if (currentToken) login(true);
+
+async function login(auto) {
+    const token = auto ? currentToken : document.getElementById('login-token').value.trim();
+    if (!token) return;
+    try {
+        const res = await fetch('/relay/user/me', { headers: { 'Authorization': 'Bearer ' + token } });
+        if (!res.ok) {
+            if (!auto) showMsg('login-error', 'API Key 无效或已过期');
+            else localStorage.removeItem('relay_user_token');
+            return;
+        }
+        const data = await res.json();
+        currentToken = token;
+        localStorage.setItem('relay_user_token', token);
+        document.getElementById('login-view').classList.add('hidden');
+        document.getElementById('user-view').classList.remove('hidden');
+        document.getElementById('logout-btn').classList.remove('hidden');
+
+        document.getElementById('user-name').textContent = data.name;
+        document.getElementById('stat-used').textContent = fmt(data.usedTokens);
+        document.getElementById('stat-requests').textContent = data.totalRequests;
+
+        if (data.quotaLimit > 0) {
+            const remaining = data.remaining;
+            document.getElementById('stat-remaining').textContent = fmt(remaining);
+            document.getElementById('stat-quota').textContent = fmt(data.quotaLimit);
+            const pct = Math.min(100, (data.usedTokens / data.quotaLimit) * 100);
+            document.getElementById('usage-bar').style.width = pct.toFixed(1) + '%';
+            document.getElementById('usage-text').textContent = `已使用 ${pct.toFixed(1)}%`;
+        } else {
+            document.getElementById('stat-remaining').textContent = '∞';
+            document.getElementById('stat-quota').textContent = '无限';
+            document.getElementById('usage-bar').style.width = '0%';
+            document.getElementById('usage-text').textContent = '无额度限制';
+        }
+        document.getElementById('info-create').textContent = data.createAt ? data.createAt.substring(0,16).replace('T',' ') : '-';
+        document.getElementById('info-expire').textContent = data.expireAt ? data.expireAt.substring(0,16).replace('T',' ') : '永不过期';
+        loadMyOrders();
+    } catch (e) {
+        if (!auto) showMsg('login-error', '网络错误');
+    }
+}
+
+function logout() {
+    localStorage.removeItem('relay_user_token');
+    currentToken = '';
+    document.getElementById('login-view').classList.remove('hidden');
+    document.getElementById('user-view').classList.add('hidden');
+    document.getElementById('logout-btn').classList.add('hidden');
+}
+
+// 注册
+function showRegister() { document.getElementById('register-card').classList.remove('hidden'); }
+function hideRegister() { document.getElementById('register-card').classList.add('hidden'); }
+let newRegToken = '';
+
+async function register() {
+    const name = document.getElementById('reg-name').value.trim();
+    if (!name) { showMsg('reg-error', '请输入用户名'); return; }
+    const res = await fetch('/relay/user/register', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+    });
+    const data = await res.json();
+    if (data.success) {
+        newRegToken = data.token;
+        document.getElementById('reg-token-value').textContent = data.token;
+        document.getElementById('register-card').classList.add('hidden');
+        document.getElementById('reg-success-card').classList.remove('hidden');
+    } else { showMsg('reg-error', data.message); }
+}
+function copyRegToken() { navigator.clipboard.writeText(newRegToken); alert('已复制到剪贴板'); }
+function useNewToken() {
+    currentToken = newRegToken;
+    localStorage.setItem('relay_user_token', newRegToken);
+    document.getElementById('reg-success-card').classList.add('hidden');
+    login(true);
+}
+
+// 充值
+let selectedPlan = null;
+let selectedPayType = 'alipay';
+
+function selectPlan(el, name, tokens, price) {
+    document.querySelectorAll('.plan-card').forEach(p => p.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedPlan = { name, tokens, price };
+    document.getElementById('pay-btn').classList.remove('hidden');
+    document.getElementById('pay-type-area').classList.remove('hidden');
+}
+
+function selectPayType(type) {
+    selectedPayType = type;
+}
+
+let currentOrderId = null;
+async function createOrder() {
+    if (!selectedPlan) return;
+    const res = await fetch('/relay/user/pay/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentToken },
+        body: JSON.stringify({ planName: selectedPlan.name, tokenAmount: selectedPlan.tokens, price: selectedPlan.price, payType: selectedPayType })
+    });
+    const data = await res.json();
+    if (data.success) {
+        currentOrderId = data.orderId;
+        // 跳转到易支付收银台
+        window.open(data.payUrl, '_blank');
+        // 显示等待弹窗
+        document.getElementById('pay-amount').textContent = '¥' + selectedPlan.price;
+        document.getElementById('pay-order-id').textContent = currentOrderId;
+        document.getElementById('pay-overlay').classList.remove('hidden');
+        document.getElementById('pay-success').classList.add('hidden');
+        // 开始轮询
+        pollOrderStatus(currentOrderId);
+    } else {
+        alert(data.message || '创建订单失败');
+    }
+}
+
+let pollTimer = null;
+function pollOrderStatus(orderId) {
+    if (pollTimer) clearInterval(pollTimer);
+    let count = 0;
+    pollTimer = setInterval(async () => {
+        count++;
+        if (count > 120) { // 最多轮询6分钟
+            clearInterval(pollTimer);
+            showMsg('pay-success', '⏰ 等待超时，请稍后在订单列表查看状态');
+            return;
+        }
+        try {
+            const res = await fetch('/relay/user/pay/status?orderId=' + orderId);
+            const data = await res.json();
+            if (data.status === 'confirmed') {
+                clearInterval(pollTimer);
+                showMsg('pay-success', '🎉 充值成功！额度已到账');
+                setTimeout(() => {
+                    document.getElementById('pay-overlay').classList.add('hidden');
+                    login(true);
+                }, 1500);
+            } else if (data.status === 'rejected') {
+                clearInterval(pollTimer);
+                showMsg('pay-success', '❌ 订单被拒绝，如有疑问请联系管理员');
+            }
+        } catch (e) { /* ignore */ }
+    }, 3000);
+}
+
+function cancelPay() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    document.getElementById('pay-overlay').classList.add('hidden');
+    currentOrderId = null;
+}
+
+// 充值码
+async function redeem() {
+    const code = document.getElementById('redeem-code').value.trim();
+    if (!code) return;
+    hideMsg('redeem-success'); hideMsg('redeem-error');
+    const res = await fetch('/relay/user/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentToken },
+        body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+    if (data.success) {
+        showMsg('redeem-success', '✅ 充值成功！+' + fmt(data.addedTokens) + ' token');
+        document.getElementById('redeem-code').value = '';
+        login(true);
+    } else { showMsg('redeem-error', data.message); }
+}
+
+// 订单
+async function loadMyOrders() {
+    const res = await fetch('/relay/user/pay/orders', { headers: { 'Authorization': 'Bearer ' + currentToken } });
+    const orders = await res.json();
+    const el = document.getElementById('my-orders');
+    if (!orders.length) { el.innerHTML = '<div style="text-align:center;color:#adb5bd;padding:16px;font-size:13px">暂无订单</div>'; return; }
+    const statusMap = { pending: '待支付', paid: '待确认', confirmed: '已完成', rejected: '已拒绝' };
+    el.innerHTML = orders.map(o => `
+        <div class="order-row">
+            <div class="order-left">
+                <div class="name">${o.planName}</div>
+                <div class="time">${o.createAt ? o.createAt.substring(0,16).replace('T',' ') : ''}</div>
+            </div>
+            <div class="order-right">
+                <div class="price">¥${o.price}</div>
+                <span class="order-tag tag-${o.status}">${statusMap[o.status] || o.status}</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+// 工具
+function fmt(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return n.toString();
+}
+function showMsg(id, text) { const el = document.getElementById(id); el.textContent = text; el.classList.remove('hidden'); }
+function hideMsg(id) { document.getElementById(id).classList.add('hidden'); }
+</script>
+</body>
+</html>

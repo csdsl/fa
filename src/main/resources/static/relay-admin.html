@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token 中转站 - 管理面板</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f6fa;
+            color: #2d3436;
+        }
+        .header {
+            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+            color: #fff;
+            padding: 20px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header h1 { font-size: 20px; }
+        .header .subtitle { font-size: 13px; opacity: 0.8; margin-top: 2px; }
+        .header a { color: #fff; text-decoration: none; opacity: 0.8; font-size: 14px; }
+        .header a:hover { opacity: 1; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+            background: #fff;
+            border-radius: 8px;
+            padding: 4px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+        .tabs button {
+            flex: 1;
+            padding: 10px 16px;
+            border: none;
+            background: transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #636e72;
+            transition: all 0.2s;
+        }
+        .tabs button.active {
+            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+            color: #fff;
+        }
+        .card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+        .card h3 { font-size: 15px; color: #636e72; margin-bottom: 12px; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            text-align: center;
+        }
+        .stat-card .number {
+            font-size: 28px;
+            font-weight: 700;
+            color: #00b894;
+        }
+        .stat-card .label {
+            font-size: 13px;
+            color: #636e72;
+            margin-top: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        th, td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        th { color: #636e72; font-weight: 500; font-size: 13px; }
+        tr:hover td { background: #f8fffe; }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+        .badge-green { background: #e8f8e8; color: #27ae60; }
+        .badge-red { background: #ffe8e8; color: #e74c3c; }
+        .badge-blue { background: #e8f4ff; color: #0984e3; }
+        .panel { display: none; }
+        .panel.active { display: block; }
+        .btn {
+            padding: 6px 14px;
+            background: #00b894;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .btn:hover { opacity: 0.9; }
+        .btn-danger { background: #e74c3c; }
+        .btn-warning { background: #fdcb6e; color: #2d3436; }
+        .empty { text-align: center; padding: 40px; color: #b2bec3; }
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 13px; color: #636e72; margin-bottom: 4px; }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #dfe6e9;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .api-info {
+            background: #f0fff4;
+            border: 1px solid #b2f2bb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+        .api-info code {
+            background: #e8f5e9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .copy-btn {
+            padding: 2px 8px;
+            font-size: 12px;
+            background: #dfe6e9;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 6px;
+        }
+        .copy-btn:hover { background: #b2bec3; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>🔄 Token 中转站</h1>
+            <div class="subtitle">API Key 管理 · 用量统计 · 兼容 OpenAI 格式</div>
+        </div>
+        <a href="/relay-user.html" style="margin-right:16px">用户面板</a>
+        <a href="/admin.html">← 客服管理</a>
+    </div>
+
+    <div class="container">
+        <!-- 接口信息 -->
+        <div class="api-info">
+            <strong>中转地址：</strong><code id="relay-url">http://localhost:8080/relay/v1</code>
+            <button class="copy-btn" onclick="copyUrl()">复制</button>
+            &nbsp;&nbsp;|&nbsp;&nbsp;
+            <strong>对话接口：</strong><code>POST /relay/v1/chat/completions</code>
+            &nbsp;&nbsp;|&nbsp;&nbsp;
+            <strong>模型列表：</strong><code>GET /relay/v1/models</code>
+        </div>
+
+        <div class="tabs">
+            <button class="active" onclick="switchTab('keys')">上游 Key</button>
+            <button onclick="switchTab('clients')">客户端 Token</button>
+            <button onclick="switchTab('codes')">充值码</button>
+            <button onclick="switchTab('orders')">充值订单</button>
+            <button onclick="switchTab('usage')">用量统计</button>
+            <button onclick="switchTab('test')">在线测试</button>
+        </div>
+
+        <!-- Key 管理面板 -->
+        <div id="panel-keys" class="panel active">
+            <div class="card">
+                <h3>添加上游 API Key</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>名称</label>
+                        <input id="key-name" placeholder="如：千问主Key">
+                    </div>
+                    <div class="form-group">
+                        <label>API Key</label>
+                        <input id="key-value" placeholder="sk-xxxx" type="password">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Base URL</label>
+                        <input id="key-url" placeholder="https://dashscope.aliyuncs.com/compatible-mode" value="https://dashscope.aliyuncs.com/compatible-mode">
+                    </div>
+                    <div class="form-group">
+                        <label>支持模型（逗号分隔，* 表示全部）</label>
+                        <input id="key-model" placeholder="*" value="*">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>额度上限（token 数，0 = 无限）</label>
+                    <input id="key-quota" type="number" value="0">
+                </div>
+                <button class="btn" onclick="addKey()">添加 Key</button>
+            </div>
+
+            <div class="card">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h3>Key 池列表</h3>
+                    <button class="btn" onclick="loadKeys()">刷新</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>ID</th><th>名称</th><th>Key</th><th>模型</th><th>已用Token</th><th>请求数</th><th>状态</th><th>操作</th></tr>
+                    </thead>
+                    <tbody id="keys-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 客户端 Token 管理面板 -->
+        <div id="panel-clients" class="panel">
+            <div class="card">
+                <h3>创建客户端 Token</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>用户名/备注</label>
+                        <input id="ct-name" placeholder="如：张三、前端团队">
+                    </div>
+                    <div class="form-group">
+                        <label>额度上限（token 数，0 = 无限）</label>
+                        <input id="ct-quota" type="number" value="0">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>过期时间（留空 = 永不过期）</label>
+                    <input id="ct-expire" type="datetime-local">
+                </div>
+                <button class="btn" onclick="createClientToken()">生成 Token</button>
+            </div>
+
+            <div class="card" id="new-token-card" style="display:none;background:#f0fff4;border:2px solid #00b894">
+                <h3>🎉 新 Token 已生成（请立即复制，后续无法再查看完整 Token）</h3>
+                <div style="margin-top:12px;padding:12px;background:#fff;border-radius:6px;font-family:monospace;font-size:15px;word-break:break-all" id="new-token-value"></div>
+                <button class="copy-btn" style="margin-top:8px;padding:6px 16px;font-size:13px" onclick="copyNewToken()">复制 Token</button>
+            </div>
+
+            <div class="card">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h3>客户端列表</h3>
+                    <button class="btn" onclick="loadClientTokens()">刷新</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>ID</th><th>用户</th><th>Token</th><th>已用/额度</th><th>请求数</th><th>过期时间</th><th>状态</th><th>操作</th></tr>
+                    </thead>
+                    <tbody id="clients-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 充值码管理面板 -->
+        <div id="panel-codes" class="panel">
+            <div class="card">
+                <h3>批量生成充值码</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>生成数量</label>
+                        <input id="code-count" type="number" value="5" min="1" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label>每张额度（token 数）</label>
+                        <input id="code-amount" type="number" value="1000000">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>备注</label>
+                    <input id="code-note" placeholder="如：赠送、购买等">
+                </div>
+                <button class="btn" onclick="generateCodes()">生成</button>
+            </div>
+
+            <div class="card" id="generated-codes-card" style="display:none">
+                <h3>🎟️ 刚生成的充值码（请保存）</h3>
+                <pre id="generated-codes" style="background:#2d3436;color:#dfe6e9;padding:16px;border-radius:8px;font-size:14px;white-space:pre-wrap"></pre>
+                <button class="copy-btn" style="margin-top:8px;padding:6px 16px;font-size:13px" onclick="copyGeneratedCodes()">复制全部</button>
+            </div>
+
+            <div class="card">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h3>充值码列表</h3>
+                    <div>
+                        <select id="code-filter" onchange="loadCodes()" style="padding:4px 8px;border:1px solid #dfe6e9;border-radius:4px;font-size:13px;margin-right:8px">
+                            <option value="all">全部</option>
+                            <option value="unused">未使用</option>
+                        </select>
+                        <button class="btn" onclick="loadCodes()">刷新</button>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>充值码</th><th>额度</th><th>状态</th><th>使用者</th><th>备注</th><th>操作</th></tr>
+                    </thead>
+                    <tbody id="codes-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 充值订单管理面板 -->
+        <div id="panel-orders" class="panel">
+            <div class="card" style="background:#fff3e0;border:1px solid #ffcc02">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h3>⏳ 待确认订单</h3>
+                    <button class="btn" onclick="loadPendingOrders()">刷新</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>订单号</th><th>用户</th><th>套餐</th><th>额度</th><th>金额</th><th>状态</th><th>时间</th><th>操作</th></tr>
+                    </thead>
+                    <tbody id="pending-orders-table"></tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h3>全部订单</h3>
+                    <button class="btn" onclick="loadAllOrders()">刷新</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>订单号</th><th>用户</th><th>套餐</th><th>额度</th><th>金额</th><th>状态</th><th>时间</th></tr>
+                    </thead>
+                    <tbody id="all-orders-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 用量统计面板 -->
+        <div id="panel-usage" class="panel">
+            <div class="stats-grid" id="usage-stats"></div>
+            <div class="card">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h3>按天统计</h3>
+                    <button class="btn" onclick="loadUsage()">刷新</button>
+                </div>
+                <table>
+                    <thead><tr><th>日期</th><th>请求数</th><th>输入Token</th><th>输出Token</th><th>总Token</th></tr></thead>
+                    <tbody id="daily-table"></tbody>
+                </table>
+            </div>
+            <div class="form-row">
+                <div class="card">
+                    <h3>按模型统计</h3>
+                    <table>
+                        <thead><tr><th>模型</th><th>请求数</th><th>总Token</th></tr></thead>
+                        <tbody id="model-table"></tbody>
+                    </table>
+                </div>
+                <div class="card">
+                    <h3>按客户端统计</h3>
+                    <table>
+                        <thead><tr><th>客户端</th><th>请求数</th><th>总Token</th></tr></thead>
+                        <tbody id="client-table"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 在线测试面板 -->
+        <div id="panel-test" class="panel">
+            <div class="card">
+                <h3>快速测试中转接口</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>模型</label>
+                        <select id="test-model">
+                            <option value="qwen-turbo">qwen-turbo</option>
+                            <option value="qwen-plus" selected>qwen-plus</option>
+                            <option value="qwen-max">qwen-max</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>客户端 Token</label>
+                        <input id="test-token" placeholder="Bearer token（可选）" value="test-user">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>消息内容</label>
+                    <input id="test-message" placeholder="你好，请介绍一下自己" value="你好，请介绍一下自己">
+                </div>
+                <button class="btn" onclick="sendTest()">发送测试</button>
+                <button class="btn btn-warning" onclick="sendTestStream()" style="margin-left:8px">流式测试</button>
+
+                <div id="test-result" style="margin-top:16px;display:none">
+                    <h3>响应结果</h3>
+                    <pre id="test-output" style="background:#2d3436;color:#dfe6e9;padding:16px;border-radius:8px;font-size:13px;white-space:pre-wrap;max-height:400px;overflow-y:auto"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+function switchTab(name) {
+    document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('panel-' + name).classList.add('active');
+
+    if (name === 'keys') loadKeys();
+    if (name === 'clients') loadClientTokens();
+    if (name === 'codes') loadCodes();
+    if (name === 'orders') { loadPendingOrders(); loadAllOrders(); }
+    if (name === 'usage') loadUsage();
+}
+
+function copyUrl() {
+    navigator.clipboard.writeText(document.getElementById('relay-url').textContent);
+    alert('已复制');
+}
+
+// ==================== 客户端 Token 管理 ====================
+async function loadClientTokens() {
+    const res = await fetch('/relay/admin/tokens');
+    const tokens = await res.json();
+    const tbody = document.getElementById('clients-table');
+    tbody.innerHTML = tokens.map(t => {
+        const tokenMask = t.token.substring(0, 12) + '****';
+        const quota = t.quotaLimit > 0 ? `${t.usedTokens.toLocaleString()} / ${t.quotaLimit.toLocaleString()}` : `${t.usedTokens.toLocaleString()} / ∞`;
+        const expire = t.expireAt ? t.expireAt.substring(0, 16).replace('T', ' ') : '永不过期';
+        const isExpired = t.expireAt && new Date(t.expireAt) < new Date();
+        const status = !t.enabled ? '禁用' : isExpired ? '已过期' : '正常';
+        const statusClass = !t.enabled ? 'badge-red' : isExpired ? 'badge-red' : 'badge-green';
+        return `<tr>
+            <td><code>${t.id}</code></td>
+            <td>${t.name}</td>
+            <td><code id="token-${t.id}">${tokenMask}</code> <button class="copy-btn" onclick="showFullToken('${t.id}', '${t.token}')">查看</button></td>
+            <td>${quota}</td>
+            <td>${t.totalRequests}</td>
+            <td>${expire}</td>
+            <td><span class="badge ${statusClass}">${status}</span></td>
+            <td>
+                <button class="btn ${t.enabled ? 'btn-warning' : ''}" style="padding:3px 8px;font-size:12px" onclick="toggleClient('${t.id}', ${!t.enabled})">${t.enabled ? '禁用' : '启用'}</button>
+                <button class="btn" style="padding:3px 8px;font-size:12px;margin-left:4px" onclick="resetClient('${t.id}')">重置</button>
+                <button class="btn btn-danger" style="padding:3px 8px;font-size:12px;margin-left:4px" onclick="deleteClient('${t.id}')">删除</button>
+            </td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="8" class="empty">暂无客户端 Token</td></tr>';
+}
+
+async function createClientToken() {
+    const name = document.getElementById('ct-name').value || '未命名用户';
+    const quota = parseInt(document.getElementById('ct-quota').value) || 0;
+    const expireInput = document.getElementById('ct-expire').value;
+    const body = { name, quotaLimit: quota };
+    if (expireInput) body.expireAt = expireInput + ':00';
+
+    const res = await fetch('/relay/admin/tokens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+    const token = await res.json();
+
+    // 显示新 Token
+    document.getElementById('new-token-card').style.display = 'block';
+    document.getElementById('new-token-value').textContent = token.token;
+
+    document.getElementById('ct-name').value = '';
+    document.getElementById('ct-quota').value = '0';
+    document.getElementById('ct-expire').value = '';
+    loadClientTokens();
+}
+
+function copyNewToken() {
+    const token = document.getElementById('new-token-value').textContent;
+    navigator.clipboard.writeText(token);
+    alert('Token 已复制到剪贴板');
+}
+
+async function toggleClient(id, enabled) {
+    await fetch(`/relay/admin/tokens/${id}/toggle?enabled=${enabled}`, { method: 'PUT' });
+    loadClientTokens();
+}
+
+async function resetClient(id) {
+    if (!confirm('确定重置该用户的用量统计？')) return;
+    await fetch(`/relay/admin/tokens/${id}/reset`, { method: 'PUT' });
+    loadClientTokens();
+}
+
+async function deleteClient(id) {
+    if (!confirm('确定删除该客户端 Token？删除后该用户将无法继续使用中转站。')) return;
+    await fetch(`/relay/admin/tokens/${id}`, { method: 'DELETE' });
+    loadClientTokens();
+}
+
+function showFullToken(id, token) {
+    const el = document.getElementById('token-' + id);
+    if (el.textContent.includes('****')) {
+        el.textContent = token;
+        el.parentElement.querySelector('.copy-btn').textContent = '复制';
+        el.parentElement.querySelector('.copy-btn').onclick = () => {
+            navigator.clipboard.writeText(token);
+            alert('已复制');
+        };
+    } else {
+        el.textContent = token.substring(0, 12) + '****';
+        el.parentElement.querySelector('.copy-btn').textContent = '查看';
+        el.parentElement.querySelector('.copy-btn').onclick = () => showFullToken(id, token);
+    }
+}
+
+// ==================== 充值码管理 ====================
+async function generateCodes() {
+    const count = parseInt(document.getElementById('code-count').value) || 5;
+    const amount = parseInt(document.getElementById('code-amount').value) || 1000000;
+    const note = document.getElementById('code-note').value;
+
+    const res = await fetch('/relay/admin/codes/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ count, tokenAmount: amount, note })
+    });
+    const codes = await res.json();
+
+    // 显示生成的码
+    const codesText = codes.map(c => `${c.code}  (${(c.tokenAmount/10000).toFixed(0)}万token)`).join('\n');
+    document.getElementById('generated-codes').textContent = codesText;
+    document.getElementById('generated-codes-card').style.display = 'block';
+
+    document.getElementById('code-note').value = '';
+    loadCodes();
+}
+
+function copyGeneratedCodes() {
+    navigator.clipboard.writeText(document.getElementById('generated-codes').textContent);
+    alert('已复制');
+}
+
+async function loadCodes() {
+    const filter = document.getElementById('code-filter').value;
+    const res = await fetch(`/relay/admin/codes?filter=${filter}`);
+    const codes = await res.json();
+    const tbody = document.getElementById('codes-table');
+    tbody.innerHTML = codes.map(c => `
+        <tr>
+            <td><code>${c.code}</code></td>
+            <td>${(c.tokenAmount/10000).toFixed(0)}万</td>
+            <td><span class="badge ${c.used ? 'badge-red' : 'badge-green'}">${c.used ? '已使用' : '未使用'}</span></td>
+            <td>${c.usedBy || '-'}</td>
+            <td>${c.note || '-'}</td>
+            <td>${!c.used ? `<button class="btn btn-danger" style="padding:3px 8px;font-size:12px" onclick="deleteCode('${c.code}')">删除</button>` : ''}</td>
+        </tr>
+    `).join('') || '<tr><td colspan="6" class="empty">暂无充值码</td></tr>';
+}
+
+async function deleteCode(code) {
+    if (!confirm('确定删除该充值码？')) return;
+    await fetch(`/relay/admin/codes/${code}`, { method: 'DELETE' });
+    loadCodes();
+}
+
+// ==================== 订单管理 ====================
+async function loadPendingOrders() {
+    const res = await fetch('/relay/admin/orders/pending');
+    const orders = await res.json();
+    const tbody = document.getElementById('pending-orders-table');
+    tbody.innerHTML = orders.map(o => `
+        <tr>
+            <td><code>${o.id}</code></td>
+            <td>${o.clientName}</td>
+            <td>${o.planName}</td>
+            <td>${(o.tokenAmount/10000).toFixed(0)}万</td>
+            <td>¥${o.price}</td>
+            <td><span class="badge ${o.status === 'paid' ? 'badge-blue' : 'badge-red'}">${o.status === 'paid' ? '已付待确认' : '待支付'}</span></td>
+            <td>${o.createAt ? o.createAt.substring(0,16).replace('T',' ') : ''}</td>
+            <td>
+                <button class="btn" style="padding:3px 10px;font-size:12px" onclick="confirmOrder('${o.id}')">✅ 确认到账</button>
+                <button class="btn btn-danger" style="padding:3px 10px;font-size:12px;margin-left:4px" onclick="rejectOrder('${o.id}')">拒绝</button>
+            </td>
+        </tr>
+    `).join('') || '<tr><td colspan="8" class="empty">暂无待确认订单 🎉</td></tr>';
+}
+
+async function loadAllOrders() {
+    const res = await fetch('/relay/admin/orders');
+    const orders = await res.json();
+    const tbody = document.getElementById('all-orders-table');
+    const statusMap = { pending: '待支付', paid: '已付待确认', confirmed: '已完成', rejected: '已拒绝' };
+    const statusClass = { pending: 'badge-red', paid: 'badge-blue', confirmed: 'badge-green', rejected: 'badge-red' };
+    tbody.innerHTML = orders.map(o => `
+        <tr>
+            <td><code>${o.id}</code></td>
+            <td>${o.clientName}</td>
+            <td>${o.planName}</td>
+            <td>${(o.tokenAmount/10000).toFixed(0)}万</td>
+            <td>¥${o.price}</td>
+            <td><span class="badge ${statusClass[o.status] || ''}">${statusMap[o.status] || o.status}</span></td>
+            <td>${o.createAt ? o.createAt.substring(0,16).replace('T',' ') : ''}</td>
+        </tr>
+    `).join('') || '<tr><td colspan="7" class="empty">暂无订单</td></tr>';
+}
+
+async function confirmOrder(id) {
+    if (!confirm('确认该订单已到账？确认后将自动为用户充值。')) return;
+    const res = await fetch(`/relay/admin/orders/${id}/confirm`, { method: 'POST' });
+    const data = await res.json();
+    alert(data.message);
+    loadPendingOrders();
+    loadAllOrders();
+}
+
+async function rejectOrder(id) {
+    if (!confirm('确定拒绝该订单？')) return;
+    await fetch(`/relay/admin/orders/${id}/reject`, { method: 'POST' });
+    loadPendingOrders();
+    loadAllOrders();
+}
+
+// ==================== Key 管理 ====================
+async function loadKeys() {
+    const res = await fetch('/relay/admin/keys');
+    const keys = await res.json();
+    const tbody = document.getElementById('keys-table');
+    tbody.innerHTML = keys.map(k => `
+        <tr>
+            <td><code>${k.id}</code></td>
+            <td>${k.name || '-'}</td>
+            <td><code>${k.key}</code></td>
+            <td><span class="badge badge-blue">${k.model || '*'}</span></td>
+            <td>${k.totalTokensUsed.toLocaleString()}</td>
+            <td>${k.totalRequests}</td>
+            <td><span class="badge ${k.enabled ? 'badge-green' : 'badge-red'}">${k.enabled ? '启用' : '禁用'}</span></td>
+            <td>
+                <button class="btn ${k.enabled ? 'btn-warning' : ''}" style="padding:3px 8px;font-size:12px" onclick="toggleKey('${k.id}', ${!k.enabled})">${k.enabled ? '禁用' : '启用'}</button>
+                <button class="btn btn-danger" style="padding:3px 8px;font-size:12px;margin-left:4px" onclick="deleteKey('${k.id}')">删除</button>
+            </td>
+        </tr>
+    `).join('') || '<tr><td colspan="8" class="empty">暂无 Key，请先添加</td></tr>';
+}
+
+async function addKey() {
+    const body = {
+        name: document.getElementById('key-name').value,
+        key: document.getElementById('key-value').value,
+        baseUrl: document.getElementById('key-url').value,
+        model: document.getElementById('key-model').value || '*',
+        quotaLimit: parseInt(document.getElementById('key-quota').value) || 0
+    };
+    if (!body.key) { alert('请输入 API Key'); return; }
+
+    await fetch('/relay/admin/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+    // 清空表单
+    document.getElementById('key-name').value = '';
+    document.getElementById('key-value').value = '';
+    loadKeys();
+}
+
+async function toggleKey(id, enabled) {
+    await fetch(`/relay/admin/keys/${id}/toggle?enabled=${enabled}`, { method: 'PUT' });
+    loadKeys();
+}
+
+async function deleteKey(id) {
+    if (!confirm('确定删除该 Key？')) return;
+    await fetch(`/relay/admin/keys/${id}`, { method: 'DELETE' });
+    loadKeys();
+}
+
+// ==================== 用量统计 ====================
+async function loadUsage() {
+    // 总体
+    const overallRes = await fetch('/relay/admin/usage');
+    const overall = await overallRes.json();
+    document.getElementById('usage-stats').innerHTML = `
+        <div class="stat-card"><div class="number">${overall.totalRequests || 0}</div><div class="label">总请求数</div></div>
+        <div class="stat-card"><div class="number">${(overall.totalPromptTokens || 0).toLocaleString()}</div><div class="label">输入 Token</div></div>
+        <div class="stat-card"><div class="number">${(overall.totalCompletionTokens || 0).toLocaleString()}</div><div class="label">输出 Token</div></div>
+        <div class="stat-card"><div class="number">${(overall.totalTokens || 0).toLocaleString()}</div><div class="label">总 Token</div></div>
+    `;
+
+    // 按天
+    const dailyRes = await fetch('/relay/admin/usage/daily');
+    const daily = await dailyRes.json();
+    document.getElementById('daily-table').innerHTML = daily.map(d => `
+        <tr><td>${d.date}</td><td>${d.requests}</td><td>${d.promptTokens}</td><td>${d.completionTokens}</td><td>${d.totalTokens}</td></tr>
+    `).join('') || '<tr><td colspan="5" class="empty">暂无数据</td></tr>';
+
+    // 按模型
+    const modelRes = await fetch('/relay/admin/usage/by-model');
+    const models = await modelRes.json();
+    document.getElementById('model-table').innerHTML = models.map(m => `
+        <tr><td><span class="badge badge-blue">${m.model}</span></td><td>${m.requests}</td><td>${(m.totalTokens || 0).toLocaleString()}</td></tr>
+    `).join('') || '<tr><td colspan="3" class="empty">暂无</td></tr>';
+
+    // 按客户端
+    const clientRes = await fetch('/relay/admin/usage/by-client');
+    const clients = await clientRes.json();
+    document.getElementById('client-table').innerHTML = clients.map(c => `
+        <tr><td><code>${c.clientToken}</code></td><td>${c.requests}</td><td>${(c.totalTokens || 0).toLocaleString()}</td></tr>
+    `).join('') || '<tr><td colspan="3" class="empty">暂无</td></tr>';
+}
+
+// ==================== 在线测试 ====================
+async function sendTest() {
+    const model = document.getElementById('test-model').value;
+    const token = document.getElementById('test-token').value;
+    const message = document.getElementById('test-message').value;
+    if (!message) { alert('请输入消息'); return; }
+
+    const resultDiv = document.getElementById('test-result');
+    const output = document.getElementById('test-output');
+    resultDiv.style.display = 'block';
+    output.textContent = '请求中...';
+
+    try {
+        const res = await fetch('/relay/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token
+            },
+            body: JSON.stringify({
+                model: model,
+                messages: [{ role: 'user', content: message }],
+                stream: false
+            })
+        });
+        const data = await res.json();
+        output.textContent = JSON.stringify(data, null, 2);
+    } catch (e) {
+        output.textContent = '错误: ' + e.message;
+    }
+}
+
+async function sendTestStream() {
+    const model = document.getElementById('test-model').value;
+    const token = document.getElementById('test-token').value;
+    const message = document.getElementById('test-message').value;
+    if (!message) { alert('请输入消息'); return; }
+
+    const resultDiv = document.getElementById('test-result');
+    const output = document.getElementById('test-output');
+    resultDiv.style.display = 'block';
+    output.textContent = '';
+
+    try {
+        const res = await fetch('/relay/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token
+            },
+            body: JSON.stringify({
+                model: model,
+                messages: [{ role: 'user', content: message }],
+                stream: true
+            })
+        });
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let fullContent = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const text = decoder.decode(value);
+            const lines = text.split('\n');
+            for (const line of lines) {
+                if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+                    try {
+                        const json = JSON.parse(line.substring(6));
+                        const content = json.choices?.[0]?.delta?.content || '';
+                        fullContent += content;
+                        output.textContent = fullContent;
+                    } catch (e) { /* skip */ }
+                }
+            }
+        }
+        if (!fullContent) output.textContent = '（无内容返回）';
+    } catch (e) {
+        output.textContent = '错误: ' + e.message;
+    }
+}
+
+// 初始加载
+loadKeys();
+</script>
+</body>
+</html>
